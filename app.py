@@ -96,16 +96,16 @@ if page == "Upload Data":
     st.markdown("### 🧪 Try Sample Dataset")
 
     try:
-        with open("sample_data.csv", "rb") as file:
+        with open("Sample_Dataset.csv", "rb") as file:
             st.download_button(
                 label="⬇️ Download Sample Dataset",
                 data=file,
-                file_name="sample_data.csv",
+                file_name="Sample_Dataset.csv",
                 mime="text/csv"
             )
 
         st.markdown("### 👀 Sample Preview")
-        sample_df = pd.read_csv("sample_data.csv")
+        sample_df = pd.read_csv("Sample_Dataset.csv")
         st.dataframe(sample_df.head())
 
     except:
