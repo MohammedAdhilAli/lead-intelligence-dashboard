@@ -88,6 +88,34 @@ def load_model():
 if "processed_df" not in st.session_state:
     st.session_state.processed_df = None
 
+st.markdown("### 🧪 Try Demo Data")
+
+if st.button("Use Sample Dataset"):
+    df = pd.read_csv("Sample_Dataset.csv")
+
+    st.success("Sample dataset loaded!")
+
+    mapping, _, suggestions = auto_map_columns(df.columns.tolist())
+    df = df.rename(columns=mapping)
+
+    model = load_model()
+    df = process_leads(df, model)
+
+    df["Lead_Score"] = df["Lead_Score"].clip(0, 100)
+
+    def recommend(row):
+        if row["Lead_Category"] == "HOT":
+            return "Call Immediately"
+        elif row["Lead_Category"] == "WARM":
+            return "Follow-up Email"
+        else:
+            return "Add to Nurture Campaign"
+
+    df["Recommended_Action"] = df.apply(recommend, axis=1)
+
+    st.session_state.processed_df = df
+
+
 # ===================================================
 # 📂 UPLOAD PAGE
 # ===================================================
