@@ -9,12 +9,12 @@ import plotly.express as px
 from sentence_transformers import SentenceTransformer
 
 from lead_scoring import process_leads
-from column_mapper import auto_map_columns, update_memory
+from column_mapper import auto_map_columns
 
 st.set_page_config(page_title="Lead Intelligence", layout="wide")
 
 # ---------------------------------------------------
-# 🎨 SAFE PREMIUM UI (NO BREAKING)
+# 🎨 UI STYLE
 # ---------------------------------------------------
 
 st.markdown("""
@@ -23,12 +23,10 @@ st.markdown("""
     background: linear-gradient(to right, #0f2027, #203a43, #2c5364);
 }
 
-/* Ensure ALL text visible */
-h1, h2, h3, h4, h5, h6, p, div {
+h1, h2, h3, h4, h5, h6, p {
     color: white !important;
 }
 
-/* KPI Cards */
 .kpi-card {
     padding: 18px;
     border-radius: 12px;
@@ -42,7 +40,6 @@ h1, h2, h3, h4, h5, h6, p, div {
 .warm { background: linear-gradient(135deg, #f7971e, #ffd200); color: black; }
 .cold { background: linear-gradient(135deg, #2193b0, #6dd5ed); }
 
-/* spacing */
 .block-container {
     padding-top: 2rem;
 }
@@ -50,7 +47,7 @@ h1, h2, h3, h4, h5, h6, p, div {
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------
-# 🎯 HEADER (FIXED)
+# HEADER
 # ---------------------------------------------------
 
 st.markdown("""
@@ -60,7 +57,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------
-# 🎨 COLORS
+# COLORS
 # ---------------------------------------------------
 
 COLOR_MAP = {
@@ -70,15 +67,14 @@ COLOR_MAP = {
 }
 
 # ---------------------------------------------------
-# 🧭 SIDEBAR
+# SIDEBAR
 # ---------------------------------------------------
 
 st.sidebar.markdown("<h2>🧭 Navigation</h2>", unsafe_allow_html=True)
-
 page = st.sidebar.radio("", ["Upload Data", "Dashboard"])
 
 # ---------------------------------------------------
-# 🤖 MODEL
+# MODEL
 # ---------------------------------------------------
 
 @st.cache_resource
@@ -88,16 +84,6 @@ def load_model():
 if "processed_df" not in st.session_state:
     st.session_state.processed_df = None
 
-st.markdown("### 🧪 Try Sample Dataset")
-
-with open("Sample_Dataset", "rb") as file:
-    st.download_button(
-        label="⬇️ Download Sample Dataset",
-        data=file,
-        file_name="Sample_Dataset",
-        mime="text/csv"
-    )
-
 # ===================================================
 # 📂 UPLOAD PAGE
 # ===================================================
@@ -106,6 +92,26 @@ if page == "Upload Data":
 
     st.markdown("<h2>📂 Upload Dataset</h2>", unsafe_allow_html=True)
 
+    # 🔥 SAMPLE DOWNLOAD
+    st.markdown("### 🧪 Try Sample Dataset")
+
+    try:
+        with open("sample_data.csv", "rb") as file:
+            st.download_button(
+                label="⬇️ Download Sample Dataset",
+                data=file,
+                file_name="sample_data.csv",
+                mime="text/csv"
+            )
+
+        st.markdown("### 👀 Sample Preview")
+        sample_df = pd.read_csv("sample_data.csv")
+        st.dataframe(sample_df.head())
+
+    except:
+        st.warning("Sample dataset not found. Please upload sample_data.csv")
+
+    # 📂 FILE UPLOAD
     uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
     if uploaded_file:
@@ -159,10 +165,7 @@ if page == "Dashboard":
 
     df = st.session_state.processed_df
 
-    # ---------------------------------------------------
-    # KPI CARDS
-    # ---------------------------------------------------
-
+    # KPI
     total = len(df)
     hot = (df["Lead_Category"] == "HOT").sum()
     warm = (df["Lead_Category"] == "WARM").sum()
@@ -177,10 +180,7 @@ if page == "Dashboard":
     col4.markdown(f"<div class='kpi-card cold'>❄️ COLD<br>{cold}</div>", unsafe_allow_html=True)
     col5.markdown(f"<div class='kpi-card'>Avg<br>{avg}</div>", unsafe_allow_html=True)
 
-    # ---------------------------------------------------
-    # CHARTS
-    # ---------------------------------------------------
-
+    # Charts
     colA, colB = st.columns(2)
 
     pie = px.pie(
@@ -190,7 +190,6 @@ if page == "Dashboard":
         color_discrete_map=COLOR_MAP,
         hole=0.4
     )
-
     pie.update_layout(plot_bgcolor="rgba(0,0,0,0)", font_color="white")
     colA.plotly_chart(pie, use_container_width=True)
 
@@ -210,27 +209,18 @@ if page == "Dashboard":
         color="Range",
         color_discrete_sequence=px.colors.sequential.Tealgrn
     )
-
     bar.update_layout(plot_bgcolor="rgba(0,0,0,0)", font_color="white")
     colB.plotly_chart(bar, use_container_width=True)
 
-    # ---------------------------------------------------
-    # TOP LEADS
-    # ---------------------------------------------------
-
+    # Top Leads
     st.markdown("<h3>🔥 Top Opportunities</h3>", unsafe_allow_html=True)
-
     top = df.sort_values(by="Lead_Score", ascending=False).head(5)
     st.dataframe(top, use_container_width=True)
 
-    # ---------------------------------------------------
-    # FILTER
-    # ---------------------------------------------------
-
+    # Filter
     st.markdown("<h3>🔍 Filter Leads</h3>", unsafe_allow_html=True)
 
     f1, f2 = st.columns(2)
-
     category = f1.selectbox("Category", ["All", "HOT", "WARM", "COLD"])
     name = f2.text_input("Search Name")
 
