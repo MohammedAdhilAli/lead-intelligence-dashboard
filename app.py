@@ -90,11 +90,11 @@ if "processed_df" not in st.session_state:
 
 st.markdown("### 🧪 Try Sample Dataset")
 
-with open("sample_data.csv", "rb") as file:
+with open("Sample_Dataset", "rb") as file:
     st.download_button(
         label="⬇️ Download Sample Dataset",
         data=file,
-        file_name="sample_data.csv",
+        file_name="Sample_Dataset",
         mime="text/csv"
     )
 
