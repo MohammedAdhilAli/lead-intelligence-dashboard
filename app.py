@@ -148,7 +148,7 @@ if page == "Upload Data":
             df["Conversion_Probability"] = (df["Lead_Score"] * df["Confidence"]).round(2)
 
             st.session_state.processed_df = df
-            st.success("Processing complete!")
+            st.success("Processing complete!,Go to dashboard page..")
 
 # ===================================================
 # 📊 DASHBOARD
