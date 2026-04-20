@@ -9,7 +9,7 @@ import plotly.express as px
 from sentence_transformers import SentenceTransformer
 
 from lead_scoring import process_leads
-from column_mapper import auto_map_columns
+from column_mapper import auto_map_columns, load_memory, save_memory
 
 st.set_page_config(page_title="Lead Intelligence", layout="wide")
 
@@ -92,7 +92,9 @@ if page == "Upload Data":
 
     st.markdown("<h2>📂 Upload Dataset</h2>", unsafe_allow_html=True)
 
-    # 🔥 SAMPLE DOWNLOAD
+    # -------------------------------
+    # 🧪 SAMPLE DATA
+    # -------------------------------
     st.markdown("### 🧪 Try Sample Dataset")
 
     try:
@@ -109,9 +111,11 @@ if page == "Upload Data":
         st.dataframe(sample_df.head())
 
     except:
-        st.warning("Sample dataset not found. Please upload sample_data.csv")
+        st.warning("Sample dataset not found.")
 
+    # -------------------------------
     # 📂 FILE UPLOAD
+    # -------------------------------
     uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
     if uploaded_file:
@@ -121,17 +125,54 @@ if page == "Upload Data":
         columns = df.columns.tolist()
         mapping, _, suggestions = auto_map_columns(columns)
 
-        st.markdown("<h3>🧠 Column Mapping</h3>", unsafe_allow_html=True)
+        # 🔥 LOAD MEMORY
+        memory = load_memory()
 
-        for col in columns:
-            if col in mapping:
-                st.success(f"{col} → {mapping[col]}")
-            else:
-                st.warning(f"{col} → Suggested: {suggestions[col]}")
+        st.markdown("<h3>🧠 Column Mapping (Editable)</h3>", unsafe_allow_html=True)
 
+        expected_cols = [
+            "Full_Name",
+            "Interest_Level",
+            "Purchase_Timeline",
+            "Budget_Range"
+        ]
+
+        user_mapping = {}
+
+        col1, col2 = st.columns(2)
+
+        for i, col in enumerate(columns):
+
+            # Priority: Memory → Suggestion → Ignore
+            default_value = memory.get(col, suggestions.get(col, "Ignore"))
+
+            with (col1 if i % 2 == 0 else col2):
+                selected = st.selectbox(
+                    f"Map: {col}",
+                    ["Ignore"] + expected_cols,
+                    index=(["Ignore"] + expected_cols).index(default_value)
+                    if default_value in expected_cols else 0,
+                    key=f"map_{col}"
+                )
+
+                if selected != "Ignore":
+                    user_mapping[col] = selected
+
+        # -------------------------------
+        # 🚀 RUN ENGINE
+        # -------------------------------
         if st.button("🚀 Run Intelligence"):
 
-            df = df.rename(columns=mapping)
+            if not user_mapping:
+                st.error("⚠️ Please map at least one column.")
+                st.stop()
+
+            # 🔥 SAVE MAPPING MEMORY
+            for original, mapped in user_mapping.items():
+                memory[original] = mapped
+            save_memory(memory)
+
+            df = df.rename(columns=user_mapping)
 
             model = load_model()
             df = process_leads(df, model)
