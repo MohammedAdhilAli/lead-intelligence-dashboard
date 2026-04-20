@@ -1,53 +1,93 @@
-import pandas as pd
-from sentence_transformers import util
+"""
+Author: Mohammed Adhil Ali
+Optimized AI Lead Scoring with Confidence
+"""
+
+import numpy as np
 
 # ---------------------------------------------------
-# REFERENCE PHRASES
+# 🎯 REFERENCE TEXTS
 # ---------------------------------------------------
 
-INTEREST_REF = {
-    "high": ["ready to buy", "very interested", "serious buyer", "high intent", "eager buyer"],
-    "medium": ["considering", "moderate interest", "thinking"],
-    "low": ["just browsing", "curious", "window shopping"]
+REFERENCE = {
+    "HIGH": [
+        "ready to buy immediately",
+        "urgent purchase",
+        "highly interested buyer",
+        "needs product now",
+        "priority client"
+    ],
+    "MEDIUM": [
+        "interested but exploring",
+        "considering options",
+        "may buy soon",
+        "evaluating product"
+    ],
+    "LOW": [
+        "just browsing",
+        "not interested",
+        "no urgency",
+        "casual inquiry"
+    ]
 }
 
-TIMELINE_REF = {
-    "short": ["immediate", "asap", "urgent", "today", "right away"],
-    "medium": ["soon", "1-3 months", "this week"],
-    "long": ["later", "future", "not sure", "exploring"]
-}
-
-BUDGET_REF = {
-    "high": ["premium", "high budget", "large budget"],
-    "medium": ["average", "medium"],
-    "low": ["low", "cheap"]
-}
-
 # ---------------------------------------------------
-# AI MATCHING
+# ⚡ PRECOMPUTE EMBEDDINGS (IMPORTANT OPTIMIZATION)
 # ---------------------------------------------------
 
-def get_ai_score(text, reference_dict, score_map, model):
+REFERENCE_EMBEDDINGS = {}
 
-    if pd.isna(text) or str(text).strip() == "":
-        return 0.3
+def initialize_reference_embeddings(model):
+    global REFERENCE_EMBEDDINGS
 
-    text_embedding = model.encode(str(text), convert_to_tensor=True)
+    if REFERENCE_EMBEDDINGS:
+        return  # already computed
 
-    best_score = 0
-
-    for category, phrases in reference_dict.items():
-        phrase_embeddings = model.encode(phrases, convert_to_tensor=True)
-        similarity = util.cos_sim(text_embedding, phrase_embeddings).max().item()
-
-        weighted_score = similarity * score_map[category]
-        best_score = max(best_score, weighted_score)
-
-    return best_score
-
+    for category, phrases in REFERENCE.items():
+        REFERENCE_EMBEDDINGS[category] = model.encode(phrases)
 
 # ---------------------------------------------------
-# SCORING + EXPLANATION
+# 🔧 UTILITIES
+# ---------------------------------------------------
+
+def cosine_similarity(a, b):
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+# ---------------------------------------------------
+# 🧠 AI SCORING FUNCTION
+# ---------------------------------------------------
+
+def get_ai_score(text, model):
+    text = str(text)
+
+    text_vec = model.encode([text])[0]
+
+    scores = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
+
+    for category, vectors in REFERENCE_EMBEDDINGS.items():
+        sims = []
+
+        for vec in vectors:
+            sim = cosine_similarity(text_vec, vec)
+            sims.append(sim)
+
+        scores[category] = max(sims)
+
+    # Best category
+    best_category = max(scores, key=scores.get)
+    confidence = scores[best_category]
+
+    if best_category == "HIGH":
+        score = 1.0
+    elif best_category == "MEDIUM":
+        score = 0.6
+    else:
+        score = 0.2
+
+    return score, confidence
+
+# ---------------------------------------------------
+# 🧮 FINAL LEAD SCORE
 # ---------------------------------------------------
 
 def calculate_lead_score(row, model):
@@ -56,60 +96,52 @@ def calculate_lead_score(row, model):
     timeline = row.get("Purchase_Timeline", "")
     budget = row.get("Budget_Range", "")
 
-    interest_score = get_ai_score(
-        interest, INTEREST_REF,
-        {"high": 1.0, "medium": 0.6, "low": 0.2},
-        model
-    )
+    i_score, i_conf = get_ai_score(interest, model)
+    t_score, t_conf = get_ai_score(timeline, model)
+    b_score, b_conf = get_ai_score(budget, model)
 
-    timeline_score = get_ai_score(
-        timeline, TIMELINE_REF,
-        {"short": 1.0, "medium": 0.6, "long": 0.2},
-        model
-    )
+    final_score = (
+        i_score * 0.4 +
+        t_score * 0.3 +
+        b_score * 0.3
+    ) * 100
 
-    budget_score = get_ai_score(
-        budget, BUDGET_REF,
-        {"high": 1.0, "medium": 0.6, "low": 0.2},
-        model
-    )
+    # Average confidence
+    confidence = (i_conf + t_conf + b_conf) / 3
 
-    score = (interest_score * 0.4 + timeline_score * 0.3 + budget_score * 0.3) * 100
-
-    explanation = f"Interest: {interest} | Timeline: {timeline} | Budget: {budget}"
-
-    return round(score), explanation
-
+    return round(final_score, 2), round(confidence, 3)
 
 # ---------------------------------------------------
-# CATEGORY
+# 🏷️ CATEGORY
 # ---------------------------------------------------
 
-def classify_lead(score):
-    if score >= 75:
+def categorize(score):
+    if score >= 70:
         return "HOT"
-    elif score >= 45:
+    elif score >= 40:
         return "WARM"
     else:
         return "COLD"
 
-
 # ---------------------------------------------------
-# MAIN PROCESS
+# 🔄 PROCESS DATAFRAME
 # ---------------------------------------------------
 
 def process_leads(df, model):
 
-    for col in ["Interest_Level", "Purchase_Timeline", "Budget_Range"]:
-        if col not in df.columns:
-            df[col] = ""
+    # 🔥 Initialize reference embeddings ONCE
+    initialize_reference_embeddings(model)
 
-    results = df.apply(lambda row: calculate_lead_score(row, model), axis=1)
+    scores = []
+    confidences = []
 
-    df["Lead_Score"] = results.apply(lambda x: x[0]).clip(0, 100)
-    df["Explanation"] = results.apply(lambda x: x[1])
+    for _, row in df.iterrows():
+        score, conf = calculate_lead_score(row, model)
+        scores.append(score)
+        confidences.append(conf)
 
-    df["Lead_Category"] = df["Lead_Score"].apply(classify_lead)
-    df["Conversion_Probability"] = df["Lead_Score"]
+    df["Lead_Score"] = scores
+    df["Confidence"] = confidences
+    df["Lead_Category"] = df["Lead_Score"].apply(categorize)
 
     return df
