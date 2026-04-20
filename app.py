@@ -22,11 +22,9 @@ st.markdown("""
 .stApp {
     background: linear-gradient(to right, #0f2027, #203a43, #2c5364);
 }
-
 h1, h2, h3, h4, h5, h6, p {
     color: white !important;
 }
-
 .kpi-card {
     padding: 18px;
     border-radius: 12px;
@@ -35,11 +33,9 @@ h1, h2, h3, h4, h5, h6, p {
     font-size: 18px;
     color: white;
 }
-
 .hot { background: linear-gradient(135deg, #ff416c, #ff4b2b); }
 .warm { background: linear-gradient(135deg, #f7971e, #ffd200); color: black; }
 .cold { background: linear-gradient(135deg, #2193b0, #6dd5ed); }
-
 .block-container {
     padding-top: 2rem;
 }
@@ -55,10 +51,6 @@ st.markdown("""
 🚀 AI Lead Intelligence Dashboard
 </h1>
 """, unsafe_allow_html=True)
-
-# ---------------------------------------------------
-# COLORS
-# ---------------------------------------------------
 
 COLOR_MAP = {
     "HOT": "#FF4B4B",
@@ -125,7 +117,6 @@ if page == "Upload Data":
         columns = df.columns.tolist()
         mapping, _, suggestions = auto_map_columns(columns)
 
-        # 🔥 LOAD MEMORY
         memory = load_memory()
 
         st.markdown("<h3>🧠 Column Mapping (Editable)</h3>", unsafe_allow_html=True)
@@ -143,7 +134,6 @@ if page == "Upload Data":
 
         for i, col in enumerate(columns):
 
-            # Priority: Memory → Suggestion → Ignore
             default_value = memory.get(col, suggestions.get(col, "Ignore"))
 
             with (col1 if i % 2 == 0 else col2):
@@ -167,7 +157,7 @@ if page == "Upload Data":
                 st.error("⚠️ Please map at least one column.")
                 st.stop()
 
-            # 🔥 SAVE MAPPING MEMORY
+            # Save mapping memory
             for original, mapped in user_mapping.items():
                 memory[original] = mapped
             save_memory(memory)
@@ -224,39 +214,36 @@ if page == "Dashboard":
     # Charts
     colA, colB = st.columns(2)
 
-    pie = px.pie(
-        df,
-        names="Lead_Category",
-        color="Lead_Category",
-        color_discrete_map=COLOR_MAP,
-        hole=0.4
-    )
+    pie = px.pie(df, names="Lead_Category", color="Lead_Category",
+                 color_discrete_map=COLOR_MAP, hole=0.4)
     pie.update_layout(plot_bgcolor="rgba(0,0,0,0)", font_color="white")
     colA.plotly_chart(pie, use_container_width=True)
 
     bins = list(range(0, 110, 10))
     labels = [f"{i}-{i+10}" for i in bins[:-1]]
-
     df["Score_Range"] = pd.cut(df["Lead_Score"], bins=bins, labels=labels)
 
     hist = df["Score_Range"].value_counts().sort_index().reset_index()
     hist.columns = ["Range", "Count"]
 
-    bar = px.bar(
-        hist,
-        x="Range",
-        y="Count",
-        text="Count",
-        color="Range",
-        color_discrete_sequence=px.colors.sequential.Tealgrn
-    )
+    bar = px.bar(hist, x="Range", y="Count", text="Count",
+                 color="Range", color_discrete_sequence=px.colors.sequential.Tealgrn)
     bar.update_layout(plot_bgcolor="rgba(0,0,0,0)", font_color="white")
     colB.plotly_chart(bar, use_container_width=True)
 
-    # Top Leads
-    st.markdown("<h3>🔥 Top Opportunities</h3>", unsafe_allow_html=True)
-    top = df.sort_values(by="Lead_Score", ascending=False).head(5)
-    st.dataframe(top, use_container_width=True)
+    # 🔥 NEW: Explainable Table
+    st.markdown("<h3>🧠 Lead Insights (Explainable AI)</h3>", unsafe_allow_html=True)
+
+    st.dataframe(
+        df[[
+            "Full_Name",
+            "Lead_Score",
+            "Confidence",
+            "Lead_Category",
+            "Explanation"
+        ]],
+        use_container_width=True
+    )
 
     # Filter
     st.markdown("<h3>🔍 Filter Leads</h3>", unsafe_allow_html=True)
@@ -273,15 +260,7 @@ if page == "Dashboard":
     if name:
         filtered = filtered[filtered["Full_Name"].str.contains(name, case=False)]
 
-    def highlight(row):
-        if row["Lead_Category"] == "HOT":
-            return ["background-color: #5c1a1a; color: white"] * len(row)
-        elif row["Lead_Category"] == "WARM":
-            return ["background-color: #5c4a1a; color: white"] * len(row)
-        else:
-            return ["background-color: #1a3a5c; color: white"] * len(row)
-
-    st.dataframe(filtered.style.apply(highlight, axis=1), use_container_width=True)
+    st.dataframe(filtered, use_container_width=True)
 
     st.download_button(
         "⬇️ Download Data",
