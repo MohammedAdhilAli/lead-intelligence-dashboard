@@ -186,6 +186,7 @@ if page == "Upload Data":
 # 📊 DASHBOARD PAGE
 # ===================================================
 
+
 if page == "Dashboard":
 
     st.markdown("<h2>📊 Dashboard Overview</h2>", unsafe_allow_html=True)
@@ -211,41 +212,63 @@ if page == "Dashboard":
     col4.markdown(f"<div class='kpi-card cold'>❄️ COLD<br>{cold}</div>", unsafe_allow_html=True)
     col5.markdown(f"<div class='kpi-card'>Avg<br>{avg}</div>", unsafe_allow_html=True)
 
-    # Charts
+    # -------------------------------
+    # 📊 CHARTS
+    # -------------------------------
     colA, colB = st.columns(2)
 
-    pie = px.pie(df, names="Lead_Category", color="Lead_Category",
-                 color_discrete_map=COLOR_MAP, hole=0.4)
+    pie = px.pie(
+        df,
+        names="Lead_Category",
+        color="Lead_Category",
+        color_discrete_map=COLOR_MAP,
+        hole=0.4
+    )
     pie.update_layout(plot_bgcolor="rgba(0,0,0,0)", font_color="white")
     colA.plotly_chart(pie, use_container_width=True)
 
     bins = list(range(0, 110, 10))
     labels = [f"{i}-{i+10}" for i in bins[:-1]]
+
     df["Score_Range"] = pd.cut(df["Lead_Score"], bins=bins, labels=labels)
 
     hist = df["Score_Range"].value_counts().sort_index().reset_index()
     hist.columns = ["Range", "Count"]
 
-    bar = px.bar(hist, x="Range", y="Count", text="Count",
-                 color="Range", color_discrete_sequence=px.colors.sequential.Tealgrn)
+    bar = px.bar(
+        hist,
+        x="Range",
+        y="Count",
+        text="Count",
+        color="Range",
+        color_discrete_sequence=px.colors.sequential.Tealgrn
+    )
     bar.update_layout(plot_bgcolor="rgba(0,0,0,0)", font_color="white")
     colB.plotly_chart(bar, use_container_width=True)
 
-    # 🔥 NEW: Explainable Table
-    st.markdown("<h3>🧠 Lead Insights (Explainable AI)</h3>", unsafe_allow_html=True)
+    # -------------------------------
+    # 🔥 TOP 5 LEADS (REPLACED SECTION)
+    # -------------------------------
+    st.markdown("<h3>🔥 Top 5 High-Value Leads</h3>", unsafe_allow_html=True)
+
+    top = df.sort_values(by="Lead_Score", ascending=False).head(5)
+
+    def highlight_top(row):
+        if row["Lead_Category"] == "HOT":
+            return ["background-color: #5c1a1a; color: white"] * len(row)
+        elif row["Lead_Category"] == "WARM":
+            return ["background-color: #5c4a1a; color: white"] * len(row)
+        else:
+            return ["background-color: #1a3a5c; color: white"] * len(row)
 
     st.dataframe(
-        df[[
-            "Full_Name",
-            "Lead_Score",
-            "Confidence",
-            "Lead_Category",
-            "Explanation"
-        ]],
+        top.style.apply(highlight_top, axis=1),
         use_container_width=True
     )
 
-    # Filter
+    # -------------------------------
+    # 🔍 FILTER SECTION (KEEP WITH EXPLANATION)
+    # -------------------------------
     st.markdown("<h3>🔍 Filter Leads</h3>", unsafe_allow_html=True)
 
     f1, f2 = st.columns(2)
@@ -260,8 +283,26 @@ if page == "Dashboard":
     if name:
         filtered = filtered[filtered["Full_Name"].str.contains(name, case=False)]
 
-    st.dataframe(filtered, use_container_width=True)
+    # 🔥 WRAP TEXT FIX (IMPORTANT)
+    styled = filtered.style.set_properties(**{
+        "white-space": "normal",
+        "word-wrap": "break-word"
+    })
 
+    # 🔥 COLOR CODING BACK
+    def highlight(row):
+        if row["Lead_Category"] == "HOT":
+            return ["background-color: #5c1a1a; color: white"] * len(row)
+        elif row["Lead_Category"] == "WARM":
+            return ["background-color: #5c4a1a; color: white"] * len(row)
+        else:
+            return ["background-color: #1a3a5c; color: white"] * len(row)
+
+    styled = styled.apply(highlight, axis=1)
+
+    st.dataframe(styled, use_container_width=True)
+
+    # DOWNLOAD
     st.download_button(
         "⬇️ Download Data",
         filtered.to_csv(index=False),
