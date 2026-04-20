@@ -14,7 +14,7 @@ from column_mapper import auto_map_columns, load_memory, save_memory
 st.set_page_config(page_title="Lead Intelligence", layout="wide")
 
 # ---------------------------------------------------
-# 🎨 UI STYLE
+# 🎨 UI STYLE (UNCHANGED)
 # ---------------------------------------------------
 
 st.markdown("""
@@ -41,10 +41,6 @@ h1, h2, h3, h4, h5, h6, p {
 }
 </style>
 """, unsafe_allow_html=True)
-
-# ---------------------------------------------------
-# HEADER
-# ---------------------------------------------------
 
 st.markdown("<h1 style='text-align: center;'>🚀 AI Lead Intelligence Dashboard</h1>", unsafe_allow_html=True)
 
@@ -80,7 +76,6 @@ if page == "Upload Data":
 
     st.markdown("<h2>📂 Upload Dataset</h2>", unsafe_allow_html=True)
 
-    # ✅ SAMPLE DATA
     st.markdown("### 🧪 Try Sample Dataset")
 
     sample_data = pd.DataFrame({
@@ -92,16 +87,10 @@ if page == "Upload Data":
 
     csv = sample_data.to_csv(index=False).encode('utf-8')
 
-    st.download_button(
-        label="⬇️ Download Sample Dataset",
-        data=csv,
-        file_name="sample_dataset.csv",
-        mime="text/csv"
-    )
+    st.download_button("⬇️ Download Sample Dataset", data=csv, file_name="sample_dataset.csv")
 
     st.dataframe(sample_data)
 
-    # Upload
     uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
     if uploaded_file:
@@ -144,14 +133,39 @@ if page == "Upload Data":
 
             df["Lead_Score"] = df["Lead_Score"].clip(0, 100)
 
-            # Conversion Probability
+            # ✅ Conversion Probability
             df["Conversion_Probability"] = (df["Lead_Score"] * df["Confidence"]).round(2)
 
+            # ✅ Recommended Action
+            def recommend(row):
+                if row["Lead_Category"] == "HOT":
+                    return "📞 Call Immediately"
+                elif row["Lead_Category"] == "WARM":
+                    return "✉️ Follow-up Email"
+                else:
+                    return "🔄 Nurture Campaign"
+
+            df["Recommended_Action"] = df.apply(recommend, axis=1)
+
+            # ✅ Short Explanation
+            def short_explanation(text):
+                try:
+                    parts = text.split("|")
+                    short = []
+                    for p in parts:
+                        val = p.split(":")[1].strip().split("(")[0]
+                        short.append(val)
+                    return " | ".join(short)
+                except:
+                    return text
+
+            df["Explanation"] = df["Explanation"].apply(short_explanation)
+
             st.session_state.processed_df = df
-            st.success("Processing complete!,Go to dashboard page..")
+            st.success("Processing complete!, Go to dashboard page..")
 
 # ===================================================
-# 📊 DASHBOARD
+# 📊 DASHBOARD PAGE
 # ===================================================
 
 if page == "Dashboard":
@@ -182,7 +196,6 @@ if page == "Dashboard":
     pie.update_layout(plot_bgcolor="rgba(0,0,0,0)", font_color="white")
     colA.plotly_chart(pie, use_container_width=True)
 
-    # Score Distribution (fixed)
     bins = list(range(0, 110, 10))
     labels = [f"{i}-{i+10}" for i in bins[:-1]]
 
@@ -200,13 +213,24 @@ if page == "Dashboard":
 
     colB.plotly_chart(bar, use_container_width=True)
 
-    # Top 5 Leads
+    # 🔥 Top 5 (NO explanation)
     st.markdown("<h3>🔥 Top 5 Leads</h3>", unsafe_allow_html=True)
 
     top = df.sort_values(by="Conversion_Probability", ascending=False).head(5)
-    st.dataframe(top, use_container_width=True)
 
-    # Filter
+    st.dataframe(
+        top[[
+            "Full_Name",
+            "Lead_Score",
+            "Confidence",
+            "Conversion_Probability",
+            "Lead_Category",
+            "Recommended_Action"
+        ]],
+        use_container_width=True
+    )
+
+    # 🔍 Filter
     st.markdown("<h3>🔍 Filter Leads</h3>", unsafe_allow_html=True)
 
     f1, f2 = st.columns(2)
@@ -221,7 +245,6 @@ if page == "Dashboard":
     if name:
         filtered = filtered[filtered["Full_Name"].str.contains(name, case=False)]
 
-    # Color styling FIXED
     def highlight(row):
         if row["Lead_Category"] == "HOT":
             return ["background-color: #5c1a1a; color: white"] * len(row)
@@ -239,6 +262,7 @@ if page == "Dashboard":
         "Confidence",
         "Conversion_Probability",
         "Lead_Category",
+        "Recommended_Action",
         "Explanation"
     ]
 
