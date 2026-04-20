@@ -80,6 +80,28 @@ if page == "Upload Data":
 
     st.markdown("<h2>📂 Upload Dataset</h2>", unsafe_allow_html=True)
 
+    # ✅ SAMPLE DATA
+    st.markdown("### 🧪 Try Sample Dataset")
+
+    sample_data = pd.DataFrame({
+        "Full_Name": ["Rahul Menon", "Anita Sharma", "Vikram Nair", "Priya Kapoor"],
+        "Interest_Level": ["very interested", "interested", "just browsing", "extremely eager buyer"],
+        "Purchase_Timeline": ["immediate", "1-3 months", "later", "asap"],
+        "Budget_Range": ["high", "medium", "low", "premium"]
+    })
+
+    csv = sample_data.to_csv(index=False).encode('utf-8')
+
+    st.download_button(
+        label="⬇️ Download Sample Dataset",
+        data=csv,
+        file_name="sample_dataset.csv",
+        mime="text/csv"
+    )
+
+    st.dataframe(sample_data)
+
+    # Upload
     uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
     if uploaded_file:
@@ -160,7 +182,7 @@ if page == "Dashboard":
     pie.update_layout(plot_bgcolor="rgba(0,0,0,0)", font_color="white")
     colA.plotly_chart(pie, use_container_width=True)
 
-    # Improved Score Distribution
+    # Score Distribution (fixed)
     bins = list(range(0, 110, 10))
     labels = [f"{i}-{i+10}" for i in bins[:-1]]
 
@@ -199,7 +221,7 @@ if page == "Dashboard":
     if name:
         filtered = filtered[filtered["Full_Name"].str.contains(name, case=False)]
 
-    # Color styling
+    # Color styling FIXED
     def highlight(row):
         if row["Lead_Category"] == "HOT":
             return ["background-color: #5c1a1a; color: white"] * len(row)
@@ -207,11 +229,6 @@ if page == "Dashboard":
             return ["background-color: #5c4a1a; color: white"] * len(row)
         else:
             return ["background-color: #1a3a5c; color: white"] * len(row)
-
-    styled = filtered.style.apply(highlight, axis=1).set_properties(**{
-        "white-space": "normal",
-        "word-wrap": "break-word"
-    })
 
     display_cols = [
         "Full_Name",
@@ -225,6 +242,13 @@ if page == "Dashboard":
         "Explanation"
     ]
 
-    st.dataframe(styled[display_cols], use_container_width=True)
+    filtered_display = filtered[display_cols]
+
+    styled = filtered_display.style.apply(highlight, axis=1).set_properties(**{
+        "white-space": "normal",
+        "word-wrap": "break-word"
+    })
+
+    st.dataframe(styled, use_container_width=True)
 
     st.download_button("⬇️ Download", filtered.to_csv(index=False), "leads.csv")
