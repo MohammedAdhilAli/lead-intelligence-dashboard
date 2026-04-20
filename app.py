@@ -47,9 +47,7 @@ h1, h2, h3, h4, h5, h6, p {
 # ---------------------------------------------------
 
 st.markdown("""
-<h1 style='text-align: center; margin-bottom: 30px;'>
-🚀 AI Lead Intelligence Dashboard
-</h1>
+<h1 style='text-align: center;'>🚀 AI Lead Intelligence Dashboard</h1>
 """, unsafe_allow_html=True)
 
 COLOR_MAP = {
@@ -84,24 +82,6 @@ if page == "Upload Data":
 
     st.markdown("<h2>📂 Upload Dataset</h2>", unsafe_allow_html=True)
 
-    st.markdown("### 🧪 Try Sample Dataset")
-
-    try:
-        with open("Sample_Dataset.csv", "rb") as file:
-            st.download_button(
-                label="⬇️ Download Sample Dataset",
-                data=file,
-                file_name="Sample_Dataset.csv",
-                mime="text/csv"
-            )
-
-        st.markdown("### 👀 Sample Preview")
-        sample_df = pd.read_csv("Sample_Dataset.csv")
-        st.dataframe(sample_df.head())
-
-    except:
-        st.warning("Sample dataset not found.")
-
     uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
     if uploaded_file:
@@ -110,46 +90,31 @@ if page == "Upload Data":
 
         columns = df.columns.tolist()
         mapping, _, suggestions = auto_map_columns(columns)
-
         memory = load_memory()
 
-        st.markdown("<h3>🧠 Column Mapping (Editable)</h3>", unsafe_allow_html=True)
+        st.markdown("<h3>🧠 Column Mapping</h3>", unsafe_allow_html=True)
 
-        expected_cols = [
-            "Full_Name",
-            "Interest_Level",
-            "Purchase_Timeline",
-            "Budget_Range"
-        ]
+        expected_cols = ["Full_Name", "Interest_Level", "Purchase_Timeline", "Budget_Range"]
 
         user_mapping = {}
 
-        col1, col2 = st.columns(2)
+        for col in columns:
+            default = memory.get(col, suggestions.get(col, "Ignore"))
 
-        for i, col in enumerate(columns):
+            selected = st.selectbox(
+                f"{col}",
+                ["Ignore"] + expected_cols,
+                index=(["Ignore"] + expected_cols).index(default)
+                if default in expected_cols else 0
+            )
 
-            default_value = memory.get(col, suggestions.get(col, "Ignore"))
-
-            with (col1 if i % 2 == 0 else col2):
-                selected = st.selectbox(
-                    f"Map: {col}",
-                    ["Ignore"] + expected_cols,
-                    index=(["Ignore"] + expected_cols).index(default_value)
-                    if default_value in expected_cols else 0,
-                    key=f"map_{col}"
-                )
-
-                if selected != "Ignore":
-                    user_mapping[col] = selected
+            if selected != "Ignore":
+                user_mapping[col] = selected
 
         if st.button("🚀 Run Intelligence"):
 
-            if not user_mapping:
-                st.error("⚠️ Please map at least one column.")
-                st.stop()
-
-            for original, mapped in user_mapping.items():
-                memory[original] = mapped
+            for k, v in user_mapping.items():
+                memory[k] = v
             save_memory(memory)
 
             df = df.rename(columns=user_mapping)
@@ -159,55 +124,38 @@ if page == "Upload Data":
 
             df["Lead_Score"] = df["Lead_Score"].clip(0, 100)
 
-            # 🔥 NEW: Conversion Probability
+            # ✅ Conversion Probability
             df["Conversion_Probability"] = (df["Lead_Score"] * df["Confidence"]).round(2)
 
-            def recommend(row):
-                if row["Lead_Category"] == "HOT":
-                    return "Call Immediately"
-                elif row["Lead_Category"] == "WARM":
-                    return "Follow-up Email"
-                else:
-                    return "Add to Nurture Campaign"
-
-            df["Recommended_Action"] = df.apply(recommend, axis=1)
-
             st.session_state.processed_df = df
-            st.success("✅ Processing complete! Go to Dashboard")
+            st.success("Processing complete!")
 
 # ===================================================
-# 📊 DASHBOARD PAGE
+# 📊 DASHBOARD
 # ===================================================
 
 if page == "Dashboard":
 
-    st.markdown("<h2>📊 Dashboard Overview</h2>", unsafe_allow_html=True)
-
     if st.session_state.processed_df is None:
-        st.warning("⚠️ Please upload data first.")
+        st.warning("Upload data first")
         st.stop()
 
-    df = st.session_state.processed_df
+    df = st.session_state.processed_df.copy()
 
-    # 🔥 SAFE fallback (prevents error)
+    # Safe fallback
     if "Conversion_Probability" not in df.columns:
         df["Conversion_Probability"] = (df["Lead_Score"] * df["Confidence"]).round(2)
 
-    total = len(df)
-    hot = (df["Lead_Category"] == "HOT").sum()
-    warm = (df["Lead_Category"] == "WARM").sum()
-    cold = (df["Lead_Category"] == "COLD").sum()
-    avg = round(df["Lead_Score"].mean(), 2)
-
+    # ---------------- KPI ----------------
     col1, col2, col3, col4, col5 = st.columns(5)
 
-    col1.markdown(f"<div class='kpi-card'>Total<br>{total}</div>", unsafe_allow_html=True)
-    col2.markdown(f"<div class='kpi-card hot'>🔥 HOT<br>{hot}</div>", unsafe_allow_html=True)
-    col3.markdown(f"<div class='kpi-card warm'>🌤️ WARM<br>{warm}</div>", unsafe_allow_html=True)
-    col4.markdown(f"<div class='kpi-card cold'>❄️ COLD<br>{cold}</div>", unsafe_allow_html=True)
-    col5.markdown(f"<div class='kpi-card'>Avg<br>{avg}</div>", unsafe_allow_html=True)
+    col1.markdown(f"<div class='kpi-card'>Total<br>{len(df)}</div>", unsafe_allow_html=True)
+    col2.markdown(f"<div class='kpi-card hot'>🔥 HOT<br>{(df['Lead_Category']=='HOT').sum()}</div>", unsafe_allow_html=True)
+    col3.markdown(f"<div class='kpi-card warm'>🌤️ WARM<br>{(df['Lead_Category']=='WARM').sum()}</div>", unsafe_allow_html=True)
+    col4.markdown(f"<div class='kpi-card cold'>❄️ COLD<br>{(df['Lead_Category']=='COLD').sum()}</div>", unsafe_allow_html=True)
+    col5.markdown(f"<div class='kpi-card'>Avg<br>{round(df['Lead_Score'].mean(),2)}</div>", unsafe_allow_html=True)
 
-    # Charts
+    # ---------------- Charts ----------------
     colA, colB = st.columns(2)
 
     pie = px.pie(df, names="Lead_Category", color="Lead_Category",
@@ -215,56 +163,49 @@ if page == "Dashboard":
     pie.update_layout(plot_bgcolor="rgba(0,0,0,0)", font_color="white")
     colA.plotly_chart(pie, use_container_width=True)
 
+    # 🔥 FIXED SCORE DISTRIBUTION
     bins = list(range(0, 110, 10))
     labels = [f"{i}-{i+10}" for i in bins[:-1]]
 
-    df["Score_Range"] = pd.cut(df["Lead_Score"], bins=bins, labels=labels)
+    df["Score_Range"] = pd.cut(df["Lead_Score"], bins=bins, labels=labels, include_lowest=True)
 
     hist = df["Score_Range"].value_counts().sort_index().reset_index()
     hist.columns = ["Range", "Count"]
 
-    bar = px.bar(hist, x="Range", y="Count", text="Count")
-    bar.update_layout(plot_bgcolor="rgba(0,0,0,0)", font_color="white")
+    bar = px.bar(
+        hist,
+        x="Range",
+        y="Count",
+        text="Count",
+        color="Range",
+        color_discrete_sequence=px.colors.sequential.Tealgrn
+    )
+
+    bar.update_traces(textposition='outside')
+
+    bar.update_layout(
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="white",
+        xaxis_title="Score Range",
+        yaxis_title="Count"
+    )
+
     colB.plotly_chart(bar, use_container_width=True)
 
-    # 🔥 PRIORITY LEADS
+    # ---------------- PRIORITY LEADS ----------------
     st.markdown("<h3>🚀 Priority Leads</h3>", unsafe_allow_html=True)
 
-    priority = df[
-        (df["Lead_Score"] > 70) &
-        (df["Confidence"] > 0.6)
-    ].sort_values(by="Conversion_Probability", ascending=False)
+    priority = df[(df["Lead_Score"] > 70) & (df["Confidence"] > 0.6)]
 
-    if len(priority) == 0:
-        st.info("No high-confidence priority leads found.")
-    else:
-        st.dataframe(
-            priority[[
-                "Full_Name",
-                "Lead_Score",
-                "Confidence",
-                "Conversion_Probability",
-                "Lead_Category"
-            ]],
-            use_container_width=True
-        )
+    st.dataframe(priority.head(5), use_container_width=True)
 
-    # 🔥 TOP 5 LEADS
-    st.markdown("<h3>🔥 Top 5 High-Value Leads</h3>", unsafe_allow_html=True)
+    # ---------------- TOP 5 ----------------
+    st.markdown("<h3>🔥 Top 5 Leads</h3>", unsafe_allow_html=True)
 
     top = df.sort_values(by="Conversion_Probability", ascending=False).head(5)
+    st.dataframe(top, use_container_width=True)
 
-    def highlight_top(row):
-        if row["Lead_Category"] == "HOT":
-            return ["background-color: #5c1a1a; color: white"] * len(row)
-        elif row["Lead_Category"] == "WARM":
-            return ["background-color: #5c4a1a; color: white"] * len(row)
-        else:
-            return ["background-color: #1a3a5c; color: white"] * len(row)
-
-    st.dataframe(top.style.apply(highlight_top, axis=1), use_container_width=True)
-
-    # 🔍 FILTER TABLE
+    # ---------------- FILTER ----------------
     st.markdown("<h3>🔍 Filter Leads</h3>", unsafe_allow_html=True)
 
     f1, f2 = st.columns(2)
@@ -279,21 +220,6 @@ if page == "Dashboard":
     if name:
         filtered = filtered[filtered["Full_Name"].str.contains(name, case=False)]
 
-    styled = filtered.style.set_properties(**{
-        "white-space": "normal",
-        "word-wrap": "break-word"
-    })
+    st.dataframe(filtered, use_container_width=True)
 
-    def highlight(row):
-        if row["Lead_Category"] == "HOT":
-            return ["background-color: #5c1a1a; color: white"] * len(row)
-        elif row["Lead_Category"] == "WARM":
-            return ["background-color: #5c4a1a; color: white"] * len(row)
-        else:
-            return ["background-color: #1a3a5c; color: white"] * len(row)
-
-    styled = styled.apply(highlight, axis=1)
-
-    st.dataframe(styled, use_container_width=True)
-
-    st.download_button("⬇️ Download Data", filtered.to_csv(index=False), "leads.csv")
+    st.download_button("Download CSV", filtered.to_csv(index=False), "leads.csv")
