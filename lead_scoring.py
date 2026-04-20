@@ -1,81 +1,57 @@
 """
 Author: Mohammed Adhil Ali
-Optimized AI Lead Scoring with Confidence
+Explainable AI Lead Scoring
 """
 
 import numpy as np
-
-# ---------------------------------------------------
-# 🎯 REFERENCE TEXTS
-# ---------------------------------------------------
 
 REFERENCE = {
     "HIGH": [
         "ready to buy immediately",
         "urgent purchase",
         "highly interested buyer",
-        "needs product now",
-        "priority client"
+        "needs product now"
     ],
     "MEDIUM": [
-        "interested but exploring",
         "considering options",
-        "may buy soon",
-        "evaluating product"
+        "interested but exploring",
+        "may buy soon"
     ],
     "LOW": [
         "just browsing",
         "not interested",
-        "no urgency",
-        "casual inquiry"
+        "no urgency"
     ]
 }
-
-# ---------------------------------------------------
-# ⚡ PRECOMPUTE EMBEDDINGS (IMPORTANT OPTIMIZATION)
-# ---------------------------------------------------
 
 REFERENCE_EMBEDDINGS = {}
 
 def initialize_reference_embeddings(model):
     global REFERENCE_EMBEDDINGS
-
     if REFERENCE_EMBEDDINGS:
-        return  # already computed
-
+        return
     for category, phrases in REFERENCE.items():
         REFERENCE_EMBEDDINGS[category] = model.encode(phrases)
-
-# ---------------------------------------------------
-# 🔧 UTILITIES
-# ---------------------------------------------------
 
 def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
-# ---------------------------------------------------
-# 🧠 AI SCORING FUNCTION
-# ---------------------------------------------------
+# 🔥 NEW: returns category + confidence + matched phrase
+def analyze_text(text, model):
+    text_vec = model.encode([str(text)])[0]
 
-def get_ai_score(text, model):
-    text = str(text)
-
-    text_vec = model.encode([text])[0]
-
-    scores = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    best_category = None
+    best_score = -1
+    best_phrase = ""
 
     for category, vectors in REFERENCE_EMBEDDINGS.items():
-        sims = []
-
-        for vec in vectors:
+        for i, vec in enumerate(vectors):
             sim = cosine_similarity(text_vec, vec)
-            sims.append(sim)
 
-        scores[category] = max(sims)
-
-    # Best category
-    best_category = max(scores, key=scores.get)
-    confidence = scores[best_category]
+            if sim > best_score:
+                best_score = sim
+                best_category = category
+                best_phrase = REFERENCE[category][i]
 
     if best_category == "HIGH":
         score = 1.0
@@ -84,11 +60,7 @@ def get_ai_score(text, model):
     else:
         score = 0.2
 
-    return score, confidence
-
-# ---------------------------------------------------
-# 🧮 FINAL LEAD SCORE
-# ---------------------------------------------------
+    return score, best_score, best_category, best_phrase
 
 def calculate_lead_score(row, model):
 
@@ -96,24 +68,23 @@ def calculate_lead_score(row, model):
     timeline = row.get("Purchase_Timeline", "")
     budget = row.get("Budget_Range", "")
 
-    i_score, i_conf = get_ai_score(interest, model)
-    t_score, t_conf = get_ai_score(timeline, model)
-    b_score, b_conf = get_ai_score(budget, model)
+    i_s, i_c, i_cat, i_phrase = analyze_text(interest, model)
+    t_s, t_c, t_cat, t_phrase = analyze_text(timeline, model)
+    b_s, b_c, b_cat, b_phrase = analyze_text(budget, model)
 
-    final_score = (
-        i_score * 0.4 +
-        t_score * 0.3 +
-        b_score * 0.3
-    ) * 100
+    final_score = (i_s * 0.4 + t_s * 0.3 + b_s * 0.3) * 100
+    confidence = (i_c + t_c + b_c) / 3
 
-    # Average confidence
-    confidence = (i_conf + t_conf + b_conf) / 3
+    # 🔥 EXPLANATION LOGIC
+    explanation = []
 
-    return round(final_score, 2), round(confidence, 3)
+    explanation.append(f"Interest: {i_cat} ({i_phrase})")
+    explanation.append(f"Timeline: {t_cat} ({t_phrase})")
+    explanation.append(f"Budget: {b_cat} ({b_phrase})")
 
-# ---------------------------------------------------
-# 🏷️ CATEGORY
-# ---------------------------------------------------
+    explanation_text = " | ".join(explanation)
+
+    return round(final_score, 2), round(confidence, 3), explanation_text
 
 def categorize(score):
     if score >= 70:
@@ -123,25 +94,23 @@ def categorize(score):
     else:
         return "COLD"
 
-# ---------------------------------------------------
-# 🔄 PROCESS DATAFRAME
-# ---------------------------------------------------
-
 def process_leads(df, model):
 
-    # 🔥 Initialize reference embeddings ONCE
     initialize_reference_embeddings(model)
 
     scores = []
     confidences = []
+    explanations = []
 
     for _, row in df.iterrows():
-        score, conf = calculate_lead_score(row, model)
+        score, conf, exp = calculate_lead_score(row, model)
         scores.append(score)
         confidences.append(conf)
+        explanations.append(exp)
 
     df["Lead_Score"] = scores
     df["Confidence"] = confidences
+    df["Explanation"] = explanations
     df["Lead_Category"] = df["Lead_Score"].apply(categorize)
 
     return df
