@@ -1,6 +1,6 @@
 """
 Author: Mohammed Adhil Ali
-Final AI Lead Intelligence Dashboard
+Project: AI Lead Intelligence Dashboard
 """
 
 import streamlit as st
@@ -22,7 +22,7 @@ st.markdown("""
 .stApp {
     background: linear-gradient(to right, #0f2027, #203a43, #2c5364);
 }
-h1, h2, h3 {
+h1, h2, h3, h4, h5, h6, p {
     color: white !important;
 }
 .kpi-card {
@@ -36,19 +36,38 @@ h1, h2, h3 {
 .hot { background: linear-gradient(135deg, #ff416c, #ff4b2b); }
 .warm { background: linear-gradient(135deg, #f7971e, #ffd200); color: black; }
 .cold { background: linear-gradient(135deg, #2193b0, #6dd5ed); }
+.block-container {
+    padding-top: 2rem;
+}
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<h1 style='text-align:center;'>🚀 AI Lead Intelligence Dashboard</h1>", unsafe_allow_html=True)
+# ---------------------------------------------------
+# HEADER
+# ---------------------------------------------------
 
-COLOR_MAP = {"HOT": "#FF4B4B", "WARM": "#FFA500", "COLD": "#1E90FF"}
+st.markdown("""
+<h1 style='text-align: center; margin-bottom: 30px;'>
+🚀 AI Lead Intelligence Dashboard
+</h1>
+""", unsafe_allow_html=True)
+
+COLOR_MAP = {
+    "HOT": "#FF4B4B",
+    "WARM": "#FFA500",
+    "COLD": "#1E90FF"
+}
 
 # ---------------------------------------------------
 # SIDEBAR
 # ---------------------------------------------------
 
-st.sidebar.markdown("## 🧭 Navigation")
+st.sidebar.markdown("<h2>🧭 Navigation</h2>", unsafe_allow_html=True)
 page = st.sidebar.radio("", ["Upload Data", "Dashboard"])
+
+# ---------------------------------------------------
+# MODEL
+# ---------------------------------------------------
 
 @st.cache_resource
 def load_model():
@@ -63,40 +82,74 @@ if "processed_df" not in st.session_state:
 
 if page == "Upload Data":
 
-    st.subheader("📂 Upload Dataset")
+    st.markdown("<h2>📂 Upload Dataset</h2>", unsafe_allow_html=True)
+
+    st.markdown("### 🧪 Try Sample Dataset")
+
+    try:
+        with open("Sample_Dataset.csv", "rb") as file:
+            st.download_button(
+                label="⬇️ Download Sample Dataset",
+                data=file,
+                file_name="Sample_Dataset.csv",
+                mime="text/csv"
+            )
+
+        st.markdown("### 👀 Sample Preview")
+        sample_df = pd.read_csv("Sample_Dataset.csv")
+        st.dataframe(sample_df.head())
+
+    except:
+        st.warning("Sample dataset not found.")
 
     uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
-        columns = df.columns.tolist()
+        st.success("File uploaded successfully!")
 
+        columns = df.columns.tolist()
         mapping, _, suggestions = auto_map_columns(columns)
+
         memory = load_memory()
 
-        st.subheader("🧠 Column Mapping")
+        st.markdown("<h3>🧠 Column Mapping (Editable)</h3>", unsafe_allow_html=True)
 
-        expected_cols = ["Full_Name", "Interest_Level", "Purchase_Timeline", "Budget_Range"]
+        expected_cols = [
+            "Full_Name",
+            "Interest_Level",
+            "Purchase_Timeline",
+            "Budget_Range"
+        ]
 
         user_mapping = {}
 
-        for col in columns:
-            default = memory.get(col, suggestions.get(col, "Ignore"))
+        col1, col2 = st.columns(2)
 
-            selected = st.selectbox(
-                f"{col}",
-                ["Ignore"] + expected_cols,
-                index=(["Ignore"] + expected_cols).index(default)
-                if default in expected_cols else 0
-            )
+        for i, col in enumerate(columns):
 
-            if selected != "Ignore":
-                user_mapping[col] = selected
+            default_value = memory.get(col, suggestions.get(col, "Ignore"))
+
+            with (col1 if i % 2 == 0 else col2):
+                selected = st.selectbox(
+                    f"Map: {col}",
+                    ["Ignore"] + expected_cols,
+                    index=(["Ignore"] + expected_cols).index(default_value)
+                    if default_value in expected_cols else 0,
+                    key=f"map_{col}"
+                )
+
+                if selected != "Ignore":
+                    user_mapping[col] = selected
 
         if st.button("🚀 Run Intelligence"):
 
-            for k, v in user_mapping.items():
-                memory[k] = v
+            if not user_mapping:
+                st.error("⚠️ Please map at least one column.")
+                st.stop()
+
+            for original, mapped in user_mapping.items():
+                memory[original] = mapped
             save_memory(memory)
 
             df = df.rename(columns=user_mapping)
@@ -104,86 +157,115 @@ if page == "Upload Data":
             model = load_model()
             df = process_leads(df, model)
 
-            # ✅ Conversion Probability
+            df["Lead_Score"] = df["Lead_Score"].clip(0, 100)
+
+            # 🔥 NEW: Conversion Probability
             df["Conversion_Probability"] = (df["Lead_Score"] * df["Confidence"]).round(2)
 
+            def recommend(row):
+                if row["Lead_Category"] == "HOT":
+                    return "Call Immediately"
+                elif row["Lead_Category"] == "WARM":
+                    return "Follow-up Email"
+                else:
+                    return "Add to Nurture Campaign"
+
+            df["Recommended_Action"] = df.apply(recommend, axis=1)
+
             st.session_state.processed_df = df
-            st.success("✅ Done! Go to Dashboard")
+            st.success("✅ Processing complete! Go to Dashboard")
 
 # ===================================================
-# 📊 DASHBOARD
+# 📊 DASHBOARD PAGE
 # ===================================================
 
 if page == "Dashboard":
 
+    st.markdown("<h2>📊 Dashboard Overview</h2>", unsafe_allow_html=True)
+
     if st.session_state.processed_df is None:
-        st.warning("Upload data first")
+        st.warning("⚠️ Please upload data first.")
         st.stop()
 
-    df = st.session_state.processed_df.copy()
+    df = st.session_state.processed_df
 
-    # KPI
-    col1, col2, col3, col4 = st.columns(4)
+    # 🔥 SAFE fallback (prevents error)
+    if "Conversion_Probability" not in df.columns:
+        df["Conversion_Probability"] = (df["Lead_Score"] * df["Confidence"]).round(2)
 
-    col1.metric("Total", len(df))
-    col2.metric("🔥 HOT", (df["Lead_Category"] == "HOT").sum())
-    col3.metric("🌤️ WARM", (df["Lead_Category"] == "WARM").sum())
-    col4.metric("❄️ COLD", (df["Lead_Category"] == "COLD").sum())
+    total = len(df)
+    hot = (df["Lead_Category"] == "HOT").sum()
+    warm = (df["Lead_Category"] == "WARM").sum()
+    cold = (df["Lead_Category"] == "COLD").sum()
+    avg = round(df["Lead_Score"].mean(), 2)
 
-    # -------------------------------
-    # 🔥 PRIORITY LEADS (NEW)
-    # -------------------------------
-    st.subheader("🚀 Priority Leads (High Confidence + High Score)")
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    col1.markdown(f"<div class='kpi-card'>Total<br>{total}</div>", unsafe_allow_html=True)
+    col2.markdown(f"<div class='kpi-card hot'>🔥 HOT<br>{hot}</div>", unsafe_allow_html=True)
+    col3.markdown(f"<div class='kpi-card warm'>🌤️ WARM<br>{warm}</div>", unsafe_allow_html=True)
+    col4.markdown(f"<div class='kpi-card cold'>❄️ COLD<br>{cold}</div>", unsafe_allow_html=True)
+    col5.markdown(f"<div class='kpi-card'>Avg<br>{avg}</div>", unsafe_allow_html=True)
+
+    # Charts
+    colA, colB = st.columns(2)
+
+    pie = px.pie(df, names="Lead_Category", color="Lead_Category",
+                 color_discrete_map=COLOR_MAP, hole=0.4)
+    pie.update_layout(plot_bgcolor="rgba(0,0,0,0)", font_color="white")
+    colA.plotly_chart(pie, use_container_width=True)
+
+    bins = list(range(0, 110, 10))
+    labels = [f"{i}-{i+10}" for i in bins[:-1]]
+
+    df["Score_Range"] = pd.cut(df["Lead_Score"], bins=bins, labels=labels)
+
+    hist = df["Score_Range"].value_counts().sort_index().reset_index()
+    hist.columns = ["Range", "Count"]
+
+    bar = px.bar(hist, x="Range", y="Count", text="Count")
+    bar.update_layout(plot_bgcolor="rgba(0,0,0,0)", font_color="white")
+    colB.plotly_chart(bar, use_container_width=True)
+
+    # 🔥 PRIORITY LEADS
+    st.markdown("<h3>🚀 Priority Leads</h3>", unsafe_allow_html=True)
 
     priority = df[
         (df["Lead_Score"] > 70) &
         (df["Confidence"] > 0.6)
     ].sort_values(by="Conversion_Probability", ascending=False)
 
-    st.dataframe(
-        priority[[
-            "Full_Name",
-            "Lead_Score",
-            "Confidence",
-            "Conversion_Probability",
-            "Lead_Category"
-        ]],
-        use_container_width=True
-    )
+    if len(priority) == 0:
+        st.info("No high-confidence priority leads found.")
+    else:
+        st.dataframe(
+            priority[[
+                "Full_Name",
+                "Lead_Score",
+                "Confidence",
+                "Conversion_Probability",
+                "Lead_Category"
+            ]],
+            use_container_width=True
+        )
 
-    # -------------------------------
     # 🔥 TOP 5 LEADS
-    # -------------------------------
-    st.subheader("🔥 Top 5 Leads")
+    st.markdown("<h3>🔥 Top 5 High-Value Leads</h3>", unsafe_allow_html=True)
 
-    top = df.sort_values(by="Lead_Score", ascending=False).head(5)
+    top = df.sort_values(by="Conversion_Probability", ascending=False).head(5)
 
-    st.dataframe(
-        top[[
-            "Full_Name",
-            "Lead_Score",
-            "Confidence",
-            "Conversion_Probability",
-            "Lead_Category"
-        ]],
-        use_container_width=True
-    )
+    def highlight_top(row):
+        if row["Lead_Category"] == "HOT":
+            return ["background-color: #5c1a1a; color: white"] * len(row)
+        elif row["Lead_Category"] == "WARM":
+            return ["background-color: #5c4a1a; color: white"] * len(row)
+        else:
+            return ["background-color: #1a3a5c; color: white"] * len(row)
 
-    # -------------------------------
-    # 📊 CHARTS
-    # -------------------------------
-    colA, colB = st.columns(2)
+    st.dataframe(top.style.apply(highlight_top, axis=1), use_container_width=True)
 
-    pie = px.pie(df, names="Lead_Category", color="Lead_Category", color_discrete_map=COLOR_MAP)
-    colA.plotly_chart(pie, use_container_width=True)
-
-    hist = px.histogram(df, x="Lead_Score", nbins=10)
-    colB.plotly_chart(hist, use_container_width=True)
-
-    # -------------------------------
-    # 🔍 FILTER
-    # -------------------------------
-    st.subheader("🔍 Filter Leads")
+    # 🔍 FILTER TABLE
+    st.markdown("<h3>🔍 Filter Leads</h3>", unsafe_allow_html=True)
 
     f1, f2 = st.columns(2)
     category = f1.selectbox("Category", ["All", "HOT", "WARM", "COLD"])
@@ -197,33 +279,21 @@ if page == "Dashboard":
     if name:
         filtered = filtered[filtered["Full_Name"].str.contains(name, case=False)]
 
-    def highlight(row):
-        if row["Lead_Category"] == "HOT":
-            return ["background-color: #5c1a1a"] * len(row)
-        elif row["Lead_Category"] == "WARM":
-            return ["background-color: #5c4a1a"] * len(row)
-        else:
-            return ["background-color: #1a3a5c"] * len(row)
-
-    styled = filtered.style.apply(highlight, axis=1).set_properties(**{
+    styled = filtered.style.set_properties(**{
         "white-space": "normal",
         "word-wrap": "break-word"
     })
 
-    st.dataframe(
-        styled[[
-            "Full_Name",
-            "Interest_Level",
-            "Purchase_Timeline",
-            "Budget_Range",
-            "Lead_Score",
-            "Confidence",
-            "Conversion_Probability",
-            "Lead_Category",
-            "Explanation"
-        ]],
-        use_container_width=True
-    )
+    def highlight(row):
+        if row["Lead_Category"] == "HOT":
+            return ["background-color: #5c1a1a; color: white"] * len(row)
+        elif row["Lead_Category"] == "WARM":
+            return ["background-color: #5c4a1a; color: white"] * len(row)
+        else:
+            return ["background-color: #1a3a5c; color: white"] * len(row)
 
-    # DOWNLOAD
-    st.download_button("⬇️ Download", filtered.to_csv(index=False), "leads.csv")
+    styled = styled.apply(highlight, axis=1)
+
+    st.dataframe(styled, use_container_width=True)
+
+    st.download_button("⬇️ Download Data", filtered.to_csv(index=False), "leads.csv")
